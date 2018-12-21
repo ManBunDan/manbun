@@ -1,0 +1,158 @@
+// ==UserScript==
+// @name         Krunker.io Hack
+// @description  Krunker.io Hacks
+// @updateURL    https://github.com/xF4b3r/krunker/raw/master/userscript.user.js
+// @downloadURL  https://github.com/xF4b3r/krunker/raw/master/userscript.user.js
+// @version      3.17
+// @author       Faber, Tehchy
+// @include      /^(https?:\/\/)?(www\.)?(.+)krunker\.io(|\/|\/\?(server|party)=.+)$/
+// @grant        GM_xmlhttpRequest
+// @run-at       document-start
+// ==/UserScript==
+
+/* eslint-env es6*/
+window.stop();
+document.innerHTML = "";
+
+class Hack {
+    constructor() {
+        this.camera = null;
+        this.inputs = null;
+        this.game = null;
+        this.fps = {
+            cur: 0,
+            times: [],
+            elm: null
+        };
+        this.canvas = null;
+        this.ctx = null;
+        this.hooks = {
+            entities: [],
+            world: null,
+            context: null,
+            config: null
+        };
+  this.settings = {
+crosshair: 0,
+};
+    createFPSCounter() {
+        if (!this.settings.fpsCounter) return;
+        const el = document.createElement("div");
+        el.id = "fpsCounter";
+        el.style.position = "absolute";
+        el.style.color = "white";
+        el.style.top = "0.4em";
+        el.style.left = "20px";
+        el.style.fontSize = "smaller";
+        el.innerHTML = `FPS: ${this.fps.cur}`;
+        this.fps.elm = el;
+        const ui = document.getElementById("gameUI");
+        ui.appendChild(el, ui);
+    }  
+  createMenu() {
+        const rh = document.getElementById('rightHolder');
+        rh.insertAdjacentHTML("beforeend", "<br/><a href='javascript:;' onmouseover=\"SOUND.play('tick_0',0.1)\" onclick='showWindow(window.windows.length);' class=\"menuLink\">Hacks</a>");
+        let self = this;
+        this.settingsMenu = {
+            fpsCounter: {
+                name: "Show FPS",
+                pre: "<div class='setHed'><center>Hack Settings</center></div><div class='setHed'>Render</div>",
+                val: 1,
+                html() {
+                    return `<label class='switch'><input type='checkbox' onclick='window.hack.setSetting("fpsCounter", this.checked)' ${self.settingsMenu.fpsCounter.val ? "checked" : ""}><span class='slider'></span></label>`;
+                },
+                set(t) {
+                    self.settings.fpsCounter = t;
+  crosshair: {
+                name: "Crosshair",
+                val: 0,
+                html() {
+                    return `<select onchange="window.hack.setSetting('crosshair', this.value)">
+                    <option value="0"${self.settingsMenu.crosshair.val == 0 ? " selected" : ""}>Default</option>
+                    <option value="1"${self.settingsMenu.crosshair.val == 1 ? " selected" : ""}>Medium</option>
+                    <option value="2"${self.settingsMenu.crosshair.val == 2 ? " selected" : ""}>Small</option>
+                    <option value="3"${self.settingsMenu.crosshair.val == 3 ? " selected" : ""}>Smallest</option>
+                    </select>`
+                },
+  keyDown(event) {
+        if (document.activeElement.id === 'chatInput') return;
+        let opt = null;
+        switch (event.key.toUpperCase()) {
+ case 'O': {
+                this.settings.crosshair++;
+                if (this.settings.crosshair > 3) this.settings.crosshair = 0;
+                this.setSetting('crosshair', this.settings.crosshair);
+                let crosshairs = ['Default', 'Medium', 'Small', 'Smallest'];
+                opt = crosshairs[this.settings.crosshair];
+                this.chatMessage(null, `<span style='color:#fff'>Crosshair - </span> <span style='color:${this.settings.crosshair > 0 ? 'green' : 'red'}'>${opt}</span>`, !0);
+                break;
+            }
+   getCrosshair(t) {
+        /* 46.75 = small; 39.75 = smallest; 52.75 = Medium */
+        if (!this.settings.crosshair > 0) return t;
+        return this.settings.crosshair === 1 ? 52.75 : (this.settings.crosshair === 2 ? 46.75 : 39.75);
+    }
+  setSetting(t, e) {
+        if (document.getElementById(`slid_hack${t}`)) document.getElementById(`slid_hack${t}`).innerHTML = e;
+        this.settingsMenu[t].set(e);
+        this.settingsMenu[t].val = e;
+        this.saveVal(`kro_set_hack_${t}`, e);
+    }
+
+    saveVal(t, e) {
+        const r = "undefined" != typeof Storage;
+        r && localStorage.setItem(t, e)
+    }
+
+    getSavedVal(t) {
+        const r = "undefined" != typeof Storage;
+        return r ? localStorage.getItem(t) : null;
+    }
+
+    onLoad() {
+        window.playerInfos.style.width = "0%";
+        this.createCanvas();
+        this.createFPSCounter();
+        this.createMenu();
+    }
+}
+
+GM_xmlhttpRequest({
+    method: "GET",
+    url: `${document.location.origin}/js/game.js`,
+    onload: res => {
+        let code = res.responseText
+        code = code.replace(/String\.prototype\.escape=function\(\){(.*)\)},(Number\.)/, "$2")
+            .replace(/if\(\w+\.isVisible\){/, "if(true){")
+            .replace(/}else \w+\.style\.display="none"/, "}")
+            .replace(/(\bthis\.list\b)/g, "window.hack.hooks.entities")
+            .replace(/\w+\.players\.list/g, "window.hack.hooks.entities")
+            .replace(/(function\(\w+,(\w+),\w+,\w+,\w+,\w+,\w+\){var \w+,\w+,\w+,\w+;window\.hack\.hooks\.entities=\[\])/, "$1;window.hack.hooks.world=$2")
+            .replace(/(\w+\.style\.left=)100\*(\w+\.\w+)\+"%",/, '$1$2*innerWidth+"px",window.hack.hooks.entities[i].hookedX=$2*innerWidth,')
+            .replace(/(\w+\.style\.top=)100\*\(1-(\w+\.\w+)\)\+"%",/, '$1(1-$2)*innerHeight+"px",window.hack.hooks.entities[i].hookedY=(1-$2)*innerHeight,')
+            .replace(/"mousemove",function\((\w+)\){if\((\w+)\.enabled/, '"mousemove",function($1){window.hack.hooks.context = $2;if($2.enabled')
+            .replace(/(\w+).procInputs\((\w+),(\w+)\),(\w+).moveCam/, 'window.hack.loop($4, $1, $2, $3), $1.procInputs($2,$3),$4.moveCam')
+            .replace(/(\w+).exports\.ambientVal/, 'window.hack.hooks.config = $1.exports, $1.exports.ambientVal')
+            .replace(/window\.updateWindow=function/, 'windows.push({header: "Hack Settings", html: "",gen: function () {var t = ""; for (var key in window.hack.settingsMenu) {window.hack.settingsMenu[key].pre && (t += window.hack.settingsMenu[key].pre), t += "<div class=\'settName\'>" + window.hack.settingsMenu[key].name + " " + window.hack.settingsMenu[key].html() + "</div>";} return t;}});window.hack.setupSettings();\nwindow.updateWindow=function')
+            .replace(/window\.addEventListener\("keydown",function\((\w+)\){/, 'window.addEventListener("keydown",function($1){window.hack.keyDown($1),')
+            .replace(/window\.addEventListener\("keyup",function\((\w+)\){/, 'window.addEventListener("keyup",function($1){window.hack.keyUp($1),')
+            .replace(/window\.addEventListener\("keypress",function\((\w+)\){/, 'window.addEventListener("keypress",function($1){window.hack.keyPress($1),')
+            .replace(/hitHolder\.innerHTML=(\w+)}\((\w+)\),(\w+).update\((\w+)\)(.*)"block"==nukeFlash\.style\.display/, 'hitHolder.innerHTML=$1}($2),$3.update($4),"block" === nukeFlash.style.display')
+            .replace(/(\w+)\("Kicked for inactivity"\)\),(.*),requestAnimFrame\((\w+)\)/, '$1("Kicked for inactivity")),requestAnimFrame($3)')
+            .replace(/(\w+).updateCrosshair=function\((\w+),(\w+)\){/, '$1.updateCrosshair=function($2,$3){$2=window.hack.getCrosshair($2);')
+            .replace(/antialias:!1/g, 'antialias:window.hack.settings.antiAlias ? 1 : !1')
+            .replace(/precision:"mediump"/g, 'precision:window.hack.settings.highPrecision ? "highp": "mediump"')
+            .replace(/setTimeout\(\(\)=>{!(.*)},2500\);/, '');
+        GM_xmlhttpRequest({
+            method: "GET",
+            url: document.location.origin,
+            onload: res => {
+                let html = res.responseText;
+                html = html.replace(/ src="js\/game\.js">/, `>${Hack.toString()}\nwindow.hack = new Hack();\n${code.toString()}`);
+                document.open();
+                document.write(html);
+                document.close();
+            }
+        })
+    }
+})
